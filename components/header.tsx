@@ -120,7 +120,7 @@ export function Header() {
                 <div className="p-3 hover:bg-accent cursor-pointer border-b">
                   <p className="text-sm font-medium">Low Stock Alert</p>
                   <p className="text-xs text-muted-foreground">
-                    27" Monitor needs restocking (5 units left)
+                    27&quot; Monitor needs restocking (5 units left)
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">5 hours ago</p>
                 </div>
