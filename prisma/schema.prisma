@@ -1,0 +1,58 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Product {
+  id                 String        @id @default(uuid())
+  sku                String        @unique
+  name               String
+  quantity           Int           @default(0)
+  costPrice          Decimal       @db.Decimal(10, 2)
+  sellingPrice       Decimal       @db.Decimal(10, 2)
+  category           String
+  lowStockThreshold  Int           @default(10)
+  supplierId         String?
+  supplier           Supplier?     @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  transactions       Transaction[]
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  @@index([category])
+  @@index([supplierId])
+}
+
+model Supplier {
+  id        String    @id @default(uuid())
+  name      String
+  email     String    @unique
+  phone     String?
+  products  Product[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Transaction {
+  id        String          @id @default(uuid())
+  type      TransactionType
+  quantity  Int
+  productId String
+  product   Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  date      DateTime        @default(now())
+  notes     String?
+
+  @@index([productId])
+  @@index([date])
+}
+
+enum TransactionType {
+  IN
+  OUT
+}
