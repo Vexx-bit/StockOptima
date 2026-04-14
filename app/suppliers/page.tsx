@@ -1,23 +1,58 @@
-export const dynamic = "force-dynamic";
+"use client";
 
-import { getSuppliers } from "@/actions/supplier";
+import { useEffect, useState } from "react";
 import { Sidebar } from "@/components/sidebar";
 import { Header } from "@/components/header";
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Plus, Mail, Phone, Package } from "lucide-react";
+import { getSuppliers, deleteSupplier } from "@/actions/suppliers";
 import { AddSupplierModal } from "@/components/add-supplier-modal";
-import { Mail, Phone, MapPin, Package } from "lucide-react";
+import { toast } from "sonner";
+import { Supplier, Product } from "@prisma/client";
 
-export default async function SuppliersPage() {
-  const result = await getSuppliers();
-  const suppliers = result.success ? result.data || [] : [];
+type SupplierWithProducts = Supplier & {
+  products: Product[];
+};
+
+export default function SuppliersPage() {
+  const [suppliers, setSuppliers] = useState<SupplierWithProducts[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [addModalOpen, setAddModalOpen] = useState(false);
+
+  const loadSuppliers = async () => {
+    setLoading(true);
+    const result = await getSuppliers();
+    if (result.success && result.data) {
+      setSuppliers(result.data);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadSuppliers();
+  }, []);
+
+  const handleModalClose = (open: boolean) => {
+    setAddModalOpen(open);
+    if (!open) {
+      loadSuppliers();
+    }
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    if (!confirm(`Are you sure you want to delete "${name}"?`)) {
+      return;
+    }
+
+    const result = await deleteSupplier(id);
+    if (result.success) {
+      toast.success("Supplier deleted successfully");
+      loadSuppliers();
+    } else {
+      toast.error(result.error || "Failed to delete supplier");
+    }
+  };
 
   return (
     <div className="flex h-screen">
@@ -27,77 +62,83 @@ export default async function SuppliersPage() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
         <main className="flex-1 overflow-y-auto p-8">
-          <div className="flex justify-between items-center mb-8">
+          <div className="mb-8 flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold tracking-tight">Suppliers</h1>
               <p className="text-muted-foreground">
-                Manage your product sources and contact info
+                Manage your supplier relationships
               </p>
             </div>
-            <AddSupplierModal />
+            <Button onClick={() => setAddModalOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Supplier
+            </Button>
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Partner Directory</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {suppliers.length === 0 ? (
-                <div className="text-center py-12 border-2 border-dashed rounded-lg">
-                  <p className="text-muted-foreground">No suppliers found</p>
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Supplier Name</TableHead>
-                      <TableHead>Contact Person</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Phone</TableHead>
-                      <TableHead>Address</TableHead>
-                      <TableHead className="text-right">Products</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {suppliers.map((supplier) => (
-                      <TableRow key={supplier.id}>
-                        <TableCell className="font-medium">
-                          {supplier.name}
-                        </TableCell>
-                        <TableCell>{supplier.contactPerson || "N/A"}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Mail className="h-3 w-3 text-muted-foreground" />
-                            {supplier.email || "N/A"}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Phone className="h-3 w-3 text-muted-foreground" />
-                            {supplier.phone || "N/A"}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <MapPin className="h-3 w-3 text-muted-foreground" />
-                            {supplier.address || "N/A"}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-2 text-muted-foreground">
-                            <Package className="h-3 w-3" />
-                            {supplier._count?.products || 0}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
+          {loading ? (
+            <div className="text-center text-muted-foreground">
+              Loading suppliers...
+            </div>
+          ) : suppliers.length === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <p className="text-muted-foreground mb-4">
+                  No suppliers found. Add your first supplier to get started.
+                </p>
+                <Button onClick={() => setAddModalOpen(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Supplier
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {suppliers.map((supplier) => (
+                <Card key={supplier.id}>
+                  <CardHeader>
+                    <CardTitle className="flex items-center justify-between">
+                      <span>{supplier.name}</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDelete(supplier.id, supplier.name)}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        Delete
+                      </Button>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex items-center gap-2 text-sm">
+                      <Mail className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-muted-foreground">
+                        {supplier.email}
+                      </span>
+                    </div>
+                    {supplier.phone && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Phone className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-muted-foreground">
+                          {supplier.phone}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 text-sm pt-2 border-t">
+                      <Package className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-medium">
+                        {supplier.products.length} product
+                        {supplier.products.length !== 1 ? "s" : ""}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </main>
       </div>
+
+      <AddSupplierModal open={addModalOpen} onOpenChange={handleModalClose} />
     </div>
   );
 }
