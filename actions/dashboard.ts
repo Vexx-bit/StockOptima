@@ -4,34 +4,33 @@ import { prisma } from "@/lib/prisma";
 
 export async function getDashboardStats() {
   try {
-    // Get total products count
-    const totalProducts = await prisma.product.count();
+    // Basic connectivity check & counts
+    const [totalProducts, totalSuppliers] = await Promise.all([
+      prisma.product.count(),
+      prisma.supplier.count(),
+    ]);
 
-    // Get low stock count
-    const lowStockCount = await prisma.product.count({
-      where: {
-        quantity: {
-          lte: prisma.product.fields.lowStockThreshold,
-        },
-      },
+    // Calculate low stock items
+    // Using a more robust approach to handle column comparisons across different drivers
+    const productsForLowStock = await prisma.product.findMany({
+      select: {
+        id: true,
+        quantity: true,
+        lowStockThreshold: true,
+        costPrice: true,
+      }
     });
+
+    const lowStockCount = productsForLowStock.filter(
+      p => p.quantity <= (p.lowStockThreshold ?? 10)
+    ).length;
 
     // Calculate total inventory value
-    const products = await prisma.product.findMany({
-      select: {
-        quantity: true,
-        costPrice: true,
-      },
-    });
-
-    const totalInventoryValue = products.reduce((sum, product) => {
-      return sum + product.quantity * Number(product.costPrice);
+    const totalInventoryValue = productsForLowStock.reduce((sum, p) => {
+      return sum + (p.quantity * Number(p.costPrice || 0));
     }, 0);
 
-    // Get total suppliers count
-    const totalSuppliers = await prisma.supplier.count();
-
-    // Get recent transactions
+    // Get recent transactions with product info
     const recentTransactions = await prisma.transaction.findMany({
       include: {
         product: {
@@ -57,8 +56,11 @@ export async function getDashboardStats() {
         recentTransactions,
       },
     };
-  } catch (error) {
-    console.error("Error fetching dashboard stats:", error);
-    return { success: false, error: "Failed to fetch dashboard statistics" };
+  } catch (error: any) {
+    console.error("CRITICAL: Error fetching dashboard stats:", error?.message || error);
+    return { 
+      success: false, 
+      error: error?.message || "Failed to fetch dashboard statistics" 
+    };
   }
 }
