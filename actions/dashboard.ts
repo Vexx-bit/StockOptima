@@ -3,48 +3,54 @@
 import { prisma } from "@/lib/prisma";
 
 export async function getDashboardStats() {
+  const startTime = Date.now();
+  console.log("LOG: Starting getDashboardStats fetch...");
+
   try {
-    // Basic connectivity check & counts
-    const [totalProducts, totalSuppliers] = await Promise.all([
-      prisma.product.count(),
-      prisma.supplier.count(),
+    // Proactive connection with timeout logic
+    await Promise.race([
+      prisma.$connect(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Database connection timeout")), 15000))
     ]);
 
-    // Calculate low stock items
-    // Using a more robust approach to handle column comparisons across different drivers
-    const productsForLowStock = await prisma.product.findMany({
-      select: {
-        id: true,
-        quantity: true,
-        lowStockThreshold: true,
-        costPrice: true,
-      }
-    });
+    // Use a single transaction for efficiency
+    const [totalProducts, totalSuppliers, productsData, recentTransactions] = await prisma.$transaction([
+      prisma.product.count(),
+      prisma.supplier.count(),
+      prisma.product.findMany({
+        select: {
+          id: true,
+          quantity: true,
+          lowStockThreshold: true,
+          costPrice: true,
+        }
+      }),
+      prisma.transaction.findMany({
+        include: {
+          product: {
+            select: {
+              name: true,
+              sku: true,
+            },
+          },
+        },
+        orderBy: {
+          date: "desc",
+        },
+        take: 5,
+      })
+    ]);
 
-    const lowStockCount = productsForLowStock.filter(
+    const lowStockCount = productsData.filter(
       p => p.quantity <= (p.lowStockThreshold ?? 10)
     ).length;
 
-    // Calculate total inventory value
-    const totalInventoryValue = productsForLowStock.reduce((sum, p) => {
+    const totalInventoryValue = productsData.reduce((sum, p) => {
       return sum + (p.quantity * Number(p.costPrice || 0));
     }, 0);
 
-    // Get recent transactions with product info
-    const recentTransactions = await prisma.transaction.findMany({
-      include: {
-        product: {
-          select: {
-            name: true,
-            sku: true,
-          },
-        },
-      },
-      orderBy: {
-        date: "desc",
-      },
-      take: 5,
-    });
+    const duration = Date.now() - startTime;
+    console.log(`LOG: Dashboard stats fetched in ${duration}ms`);
 
     return {
       success: true,
@@ -57,10 +63,13 @@ export async function getDashboardStats() {
       },
     };
   } catch (error: any) {
-    console.error("CRITICAL: Error fetching dashboard stats:", error?.message || error);
+    const duration = Date.now() - startTime;
+    console.error(`CRITICAL: Error after ${duration}ms:`, error?.message || error);
+    
+    // Fallback data structure to prevent page-level fail if one part hangs
     return { 
       success: false, 
-      error: error?.message || "Failed to fetch dashboard statistics" 
+      error: error?.message || "Connection timeout" 
     };
   }
 }
