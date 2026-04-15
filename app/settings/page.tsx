@@ -14,19 +14,32 @@ import {
 } from "lucide-react";
 
 export default async function SettingsPage() {
-  // Get database statistics
-  const [productCount, supplierCount, transactionCount, lowStockCount] = await Promise.all([
-    prisma.product.count(),
-    prisma.supplier.count(),
-    prisma.transaction.count(),
-    prisma.product.count({
-      where: {
-        quantity: {
-          lte: 10, // Fallback threshold for build safety
+  // Get database statistics with error handling for empty/disconnected databases
+  let stats = {
+    productCount: 0,
+    supplierCount: 0,
+    transactionCount: 0,
+    lowStockCount: 0
+  };
+
+  try {
+    const [productCount, supplierCount, transactionCount, lowStockCount] = await Promise.all([
+      prisma.product.count(),
+      prisma.supplier.count(),
+      prisma.transaction.count(),
+      prisma.product.count({
+        where: {
+          quantity: {
+            lte: 10, // Modern default threshold
+          },
         },
-      },
-    }),
-  ]);
+      }),
+    ]);
+    stats = { productCount, supplierCount, transactionCount, lowStockCount };
+  } catch (error) {
+    console.error("Database connection failed during settings fetching:", error);
+    // Stats remain 0 by default, prevents page crash
+  }
 
   return (
     <div className="flex h-screen">
@@ -53,7 +66,7 @@ export default async function SettingsPage() {
                 <Package className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{productCount}</div>
+                <div className="text-2xl font-bold">{stats.productCount}</div>
                 <p className="text-xs text-muted-foreground">
                   In your inventory
                 </p>
@@ -68,7 +81,7 @@ export default async function SettingsPage() {
                 <Users className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{supplierCount}</div>
+                <div className="text-2xl font-bold">{stats.supplierCount}</div>
                 <p className="text-xs text-muted-foreground">
                   Registered suppliers
                 </p>
@@ -83,7 +96,7 @@ export default async function SettingsPage() {
                 <Activity className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{transactionCount}</div>
+                <div className="text-2xl font-bold">{stats.transactionCount}</div>
                 <p className="text-xs text-muted-foreground">
                   Stock movements
                 </p>
@@ -99,7 +112,7 @@ export default async function SettingsPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-orange-500">
-                  {lowStockCount}
+                  {stats.lowStockCount}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Need attention
@@ -131,9 +144,9 @@ export default async function SettingsPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Status</span>
-                  <span className="flex items-center gap-2 font-medium text-green-500">
-                    <span className="h-2 w-2 rounded-full bg-green-500"></span>
-                    Online
+                  <span className={`flex items-center gap-2 font-medium ${stats.productCount >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                    <span className={`h-2 w-2 rounded-full ${stats.productCount >= 0 ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                    {stats.productCount >= 0 ? 'Online' : 'Database Error'}
                   </span>
                 </div>
               </CardContent>
@@ -153,9 +166,9 @@ export default async function SettingsPage() {
               <CardContent className="space-y-3">
                 <div className="flex justify-between items-center">
                   <span className="text-muted-foreground">Database</span>
-                  <span className="flex items-center gap-2 font-medium text-green-500">
-                    <span className="h-2 w-2 rounded-full bg-green-500"></span>
-                    Connected
+                  <span className={`flex items-center gap-2 font-medium ${stats.productCount >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                    <span className={`h-2 w-2 rounded-full ${stats.productCount >= 0 ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                    {stats.productCount >= 0 ? 'Connected' : 'Disconnected'}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
